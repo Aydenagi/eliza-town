@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "node --watch src/server.js",
     "start": "node src/server.js",
+    "cli": "node src/cli.js",
     "db:init": "node src/db/init.js"
+  },
+  "bin": {
+    "eliza-town": "./src/cli.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.27.0",

@@ -4,6 +4,8 @@ import * as orchestration from '../orchestration/loop.js';
 import * as storage from '../storage/index.js';
 import { chatWithUser } from '../agents/claude.js';
 import * as oauth from '../services/oauth.js';
+import * as channels from '../services/channels.js';
+import * as proactive from '../services/proactive.js';
 
 const router = Router();
 
@@ -482,6 +484,107 @@ router.get('/gmail/messages', async (req, res) => {
     const maxResults = parseInt(req.query.limit) || 10;
     const messages = await oauth.getGmailMessages(sessionId, maxResults);
     res.json(messages);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// === Channels (Discord, Telegram, Webhooks) ===
+
+router.get('/channels/status', (req, res) => {
+  try {
+    const status = channels.getStatus();
+    res.json(status);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/channels/connected', (req, res) => {
+  try {
+    const connected = channels.getConnectedChannels();
+    res.json(connected);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Register a webhook
+router.post('/webhooks/register', (req, res) => {
+  try {
+    const { id, secret, config } = req.body;
+    if (!id || !secret) {
+      return res.status(400).json({ error: 'id and secret required' });
+    }
+    const result = channels.registerWebhook(id, secret, config);
+    res.status(201).json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Incoming webhook messages
+router.post('/webhooks/:id/incoming', (req, res) => {
+  try {
+    const webhookId = req.params.id;
+    const secret = req.headers['x-webhook-secret'] || req.body.secret;
+    const result = channels.handleWebhookMessage(webhookId, req.body, secret);
+
+    if (result.error) {
+      return res.status(400).json(result);
+    }
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// === Proactive System ===
+
+router.get('/proactive/status', (req, res) => {
+  try {
+    const status = proactive.getStatus();
+    res.json(status);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Schedule a custom task
+router.post('/proactive/schedule', (req, res) => {
+  try {
+    const { name, intervalMs, sessionId } = req.body;
+    if (!name || !intervalMs) {
+      return res.status(400).json({ error: 'name and intervalMs required' });
+    }
+
+    const task = proactive.scheduleTask({
+      name,
+      intervalMs,
+      sessionId,
+      action: async () => {
+        // Create an orchestration task when schedule fires
+        const result = await orchestration.createTask(
+          `[Scheduled] ${name}`,
+          `Automatically triggered scheduled task: ${name}`,
+          5,
+          sessionId
+        );
+        return { taskCreated: result.id };
+      }
+    });
+
+    res.status(201).json(task);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Cancel a scheduled task
+router.delete('/proactive/schedule/:id', (req, res) => {
+  try {
+    const success = proactive.cancelScheduledTask(req.params.id);
+    res.json({ success });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

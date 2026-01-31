@@ -139,6 +139,22 @@ async function initializeBackend() {
       console.log('Orchestration loop started (2s interval) - SIMULATION MODE (no ANTHROPIC_API_KEY)');
     }
 
+    // Initialize messaging channels (Discord, Telegram, webhooks)
+    try {
+      const channelService = await import('./services/channels.js');
+      await channelService.initialize();
+    } catch (channelError) {
+      console.log('Channel init skipped:', channelError.message);
+    }
+
+    // Initialize proactive agent system
+    try {
+      const proactiveService = await import('./services/proactive.js');
+      proactiveService.initialize();
+    } catch (proactiveError) {
+      console.log('Proactive system init skipped:', proactiveError.message);
+    }
+
   } catch (error) {
     dbError = error;
     console.error('Backend initialization error:', error.message);
@@ -157,6 +173,14 @@ process.on('SIGTERM', async () => {
     const orchestration = await import('./orchestration/loop.js');
     orchestration.stop();
   }
+  try {
+    const channelService = await import('./services/channels.js');
+    channelService.shutdown();
+  } catch (e) { /* ignore */ }
+  try {
+    const proactiveService = await import('./services/proactive.js');
+    proactiveService.shutdown();
+  } catch (e) { /* ignore */ }
   server.close(() => {
     console.log('Server closed');
     process.exit(0);
