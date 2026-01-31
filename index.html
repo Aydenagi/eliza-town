@@ -2206,7 +2206,8 @@
           planner: 0xc084fc,
           designer: 0xf472b6,
           coder: 0x60a5fa,
-          reviewer: 0x4ade80
+          reviewer: 0x4ade80,
+          claude: 0xf59e0b
         };
         const color = colors[this.agentType] || 0xffffff;
 
@@ -2657,6 +2658,9 @@
 
       // Reviewer - Clara the Tiefling - starts at review station
       loadAgentCharacter('Tiefling', 'agent_reviewer', 'Clara', 'reviewer', 'review_station', 'medium', 1);
+
+      // Claude - The Superhero - AI overseer at town square
+      loadAgentCharacter('Superhero', 'agent_claude', 'Claude', 'claude', 'town_square', 'medium', 1);
     }
 
     // Create a glowing marker for a hub location
@@ -2758,7 +2762,8 @@
       planner: '#c084fc',
       designer: '#f472b6',
       coder: '#60a5fa',
-      reviewer: '#4ade80'
+      reviewer: '#4ade80',
+      claude: '#f59e0b'
     };
 
     function connectWebSocket() {

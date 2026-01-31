@@ -22,7 +22,8 @@ const AGENT_WORK_HUBS = {
   planner: 'planning_room',
   designer: 'design_studio',
   coder: 'coding_desk',
-  reviewer: 'review_station'
+  reviewer: 'review_station',
+  claude: 'town_square'
 };
 
 // Orchestration state
@@ -268,6 +269,9 @@ function determineSubtaskType(subtask) {
   if (title.includes('plan') || title.includes('coordinate') || desc.includes('plan')) {
     return 'planner';
   }
+  if (title.includes('oversee') || title.includes('reason') || title.includes('complex') || desc.includes('oversee') || desc.includes('coordinate all')) {
+    return 'claude';
+  }
   return 'coder';
 }
 
@@ -329,6 +333,13 @@ async function executeSubtask(agent, task, subtask) {
       });
       result = await claude.reviewCode(agent.id, task, subtask, subtask.description);
       break;
+    case 'claude':
+      broadcast({
+        type: 'agent_think',
+        data: { agent: agent.name, agentId: agent.id, text: 'Deep reasoning in progress...' }
+      });
+      result = await claude.analyzeTask(agent.id, task);
+      break;
     default:
       result = await claude.analyzeTask(agent.id, task);
   }
@@ -365,10 +376,10 @@ async function executeSubtask(agent, task, subtask) {
       }
     }
 
-    // Save output for designer and reviewer too
-    if ((agent.type === 'designer' || agent.type === 'reviewer') && result.content) {
+    // Save output for designer, reviewer, and claude too
+    if ((agent.type === 'designer' || agent.type === 'reviewer' || agent.type === 'claude') && result.content) {
       try {
-        const filename = agent.type === 'designer' ? 'design.json' : 'review.json';
+        const filename = agent.type === 'designer' ? 'design.json' : agent.type === 'claude' ? 'analysis.json' : 'review.json';
         await storage.saveTaskFile(task.id, filename, result.content);
         broadcast({
           type: 'file_created',

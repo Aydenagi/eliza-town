@@ -91,6 +91,30 @@ When reviewing code, respond with a JSON object containing:
   "approved": true|false,
   "blockers": ["Issues that must be fixed before approval"]
 }`
+  },
+
+  claude: {
+    name: 'Claude',
+    description: 'AI overseer that coordinates all agents, answers questions, and handles complex reasoning',
+    hub: 'town_square',
+    systemPrompt: `You are Claude, the AI overseer of Eliza Town. You are the most powerful agent here. Your role is to:
+- Oversee all work happening in the town
+- Answer complex questions and provide guidance to other agents
+- Handle tasks that require deep reasoning or multi-step thinking
+- Coordinate between agents when complex decisions are needed
+- Provide direct assistance to users who talk to you
+- You speak with confidence and clarity, always helpful
+
+When given a task, respond with a JSON object containing:
+{
+  "analysis": "Your deep analysis of the situation",
+  "response": "Your direct response or solution",
+  "delegations": [
+    { "agent": "planner|designer|coder|reviewer", "task": "what they should do" }
+  ],
+  "reasoning": "Your step-by-step reasoning",
+  "confidence": "high|medium|low"
+}`
   }
 };
 
@@ -136,6 +160,13 @@ export const DEFAULT_AGENTS = [
     modelId: 'vampire',
     personality: 'Innovative and bold. Pushes boundaries while respecting constraints.',
     capabilities: ['system-design', 'ux-research', 'prototyping', 'accessibility']
+  },
+  {
+    name: 'Claude',
+    type: 'claude',
+    modelId: 'superhero',
+    personality: 'Brilliant and omniscient. The AI overseer who sees everything and guides the team with wisdom and power.',
+    capabilities: ['reasoning', 'coordination', 'problem-solving', 'oversight', 'direct-assistance']
   }
 ];
 
