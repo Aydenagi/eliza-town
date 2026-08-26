@@ -1,166 +1,76 @@
-/**
- * API service for ElizaOS backend
- */
-
 const API_BASE = '/api'
+const SESSION_KEY = 'eliza-town-session-id'
 
-// Session ID for per-user task isolation
 function getSessionId() {
-  let sessionId = localStorage.getItem('eliza-session-id')
+  let sessionId = localStorage.getItem(SESSION_KEY)
   if (!sessionId) {
-    sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    localStorage.setItem('eliza-session-id', sessionId)
+    sessionId = `session_${Date.now()}_${Math.random().toString(36).slice(2, 11)}`
+    localStorage.setItem(SESSION_KEY, sessionId)
   }
   return sessionId
 }
 
-const SESSION_ID = getSessionId()
+export const SESSION_ID = getSessionId()
 
-/**
- * Check server health
- */
+async function parseError(response) {
+  try {
+    const body = await response.json()
+    return body.error || `Request failed (${response.status})`
+  } catch {
+    return `Request failed (${response.status})`
+  }
+}
+
 export async function checkHealth() {
   const response = await fetch(`${API_BASE}/health`)
-  if (!response.ok) throw new Error('Server offline')
+  if (!response.ok) throw new Error(await parseError(response))
   return response.json()
 }
 
-/**
- * Get all agents
- */
 export async function getAgents() {
   const response = await fetch(`${API_BASE}/agents`)
-  if (!response.ok) throw new Error('Failed to fetch agents')
+  if (!response.ok) throw new Error(await parseError(response))
   return response.json()
 }
 
-/**
- * Get agent by ID
- */
-export async function getAgent(id) {
-  const response = await fetch(`${API_BASE}/agents/${id}`)
-  if (!response.ok) throw new Error('Agent not found')
-  return response.json()
-}
-
-/**
- * Update agent
- */
 export async function updateAgent(id, updates) {
   const response = await fetch(`${API_BASE}/agents/${id}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(updates),
   })
-  if (!response.ok) throw new Error('Failed to update agent')
+  if (!response.ok) throw new Error(await parseError(response))
   return response.json()
 }
 
-/**
- * Trigger agent decision
- */
-export async function triggerAgentDecision(id, prompt) {
-  const response = await fetch(`${API_BASE}/agents/${id}/decide`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ prompt }),
-  })
-  if (!response.ok) throw new Error('Failed to trigger decision')
-  return response.json()
-}
-
-/**
- * Get tasks
- */
-export async function getTasks(status = null) {
-  const url = status 
-    ? `${API_BASE}/tasks?status=${status}` 
-    : `${API_BASE}/tasks`
-  const response = await fetch(url, {
+export async function getTasks() {
+  const response = await fetch(`${API_BASE}/tasks`, {
     headers: { 'X-Session-Id': SESSION_ID },
   })
-  if (!response.ok) throw new Error('Failed to fetch tasks')
+  if (!response.ok) throw new Error(await parseError(response))
   return response.json()
 }
 
-/**
- * Create task
- */
-export async function createTask(title, description = '', priority = 5) {
+export async function createTask({ title, description, priority }, llm) {
+  const headers = {
+    'Content-Type': 'application/json',
+    'X-Session-Id': SESSION_ID,
+  }
+  if (llm?.provider && llm?.key) {
+    headers['X-LLM-Provider'] = llm.provider
+    headers['X-LLM-Key'] = llm.key
+    if (llm.model) headers['X-LLM-Model'] = llm.model
+  }
+
   const response = await fetch(`${API_BASE}/tasks`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Session-Id': SESSION_ID,
-    },
+    headers,
     body: JSON.stringify({ title, description, priority }),
   })
-  if (!response.ok) throw new Error('Failed to create task')
+  if (!response.ok) throw new Error(await parseError(response))
   return response.json()
 }
 
-/**
- * Get task files
- */
-export async function getTaskFiles(taskId) {
-  const response = await fetch(`${API_BASE}/tasks/${taskId}/files`)
-  if (!response.ok) throw new Error('Failed to fetch files')
-  return response.json()
-}
-
-/**
- * Download task file
- */
-export async function downloadTaskFile(taskId, filename) {
-  const response = await fetch(`${API_BASE}/tasks/${taskId}/files/${filename}`)
-  if (!response.ok) throw new Error('File not found')
-  const blob = await response.blob()
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  a.click()
-  URL.revokeObjectURL(url)
-}
-
-/**
- * Get ElizaOS runtime info
- */
-export async function getElizaRuntimes() {
-  const response = await fetch(`${API_BASE}/eliza/runtimes`)
-  if (!response.ok) throw new Error('Failed to fetch runtimes')
-  return response.json()
-}
-
-/**
- * Get orchestration state
- */
-export async function getOrchestrationState() {
-  const response = await fetch(`${API_BASE}/orchestration/state`)
-  if (!response.ok) throw new Error('Failed to fetch state')
-  return response.json()
-}
-
-/**
- * Start orchestration
- */
-export async function startOrchestration(interval = 5000) {
-  const response = await fetch(`${API_BASE}/orchestration/start`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ interval }),
-  })
-  if (!response.ok) throw new Error('Failed to start')
-  return response.json()
-}
-
-/**
- * Stop orchestration
- */
-export async function stopOrchestration() {
-  const response = await fetch(`${API_BASE}/orchestration/stop`, {
-    method: 'POST',
-  })
-  if (!response.ok) throw new Error('Failed to stop')
-  return response.json()
+export function taskFileUrl(taskId, filename) {
+  return `${API_BASE}/tasks/${taskId}/files/${encodeURIComponent(filename)}`
 }

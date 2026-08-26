@@ -23,7 +23,7 @@ const runtimeBundles = new Map<string, RuntimeBundle>();
 const agentMetadata = new Map<string, AgentMetadata>();
 
 // External dependencies (set during initialization)
-let dbModule: typeof import('../db/index.js') | null = null;
+let dbModule: typeof import('../store/index.js') | null = null;
 let broadcastFn: BroadcastFn | null = null;
 let storageModule: typeof import('../storage/index.js') | null = null;
 
@@ -46,7 +46,7 @@ let sharedWorldId: string | null = null;
 let narratorId: string | null = null;
 
 interface InitializeOptions {
-  db?: typeof import('../db/index.js') | null;
+  db?: typeof import('../store/index.js') | null;
   broadcast?: BroadcastFn | null;
   storage?: typeof import('../storage/index.js') | null;
 }
@@ -54,6 +54,13 @@ interface InitializeOptions {
 /**
  * Initialize the runtime manager
  */
+// tsc only resolves module types for import() when the specifier is a string literal;
+// routing optional ElizaOS packages through this helper keeps a missing/unbuilt package
+// from breaking `tsc` for everyone else, matching their optionalDependencies status.
+async function optionalImport(specifier: string): Promise<any> {
+  return import(specifier);
+}
+
 export async function initialize(options: InitializeOptions = {}): Promise<void> {
   if (initialized) {
     console.log('[RuntimeManager] Already initialized');
@@ -69,7 +76,7 @@ export async function initialize(options: InitializeOptions = {}): Promise<void>
 
   // Load ElizaOS core
   try {
-    const core = await import('@elizaos/core');
+    const core = await optionalImport('@elizaos/core');
     AgentRuntime = core.AgentRuntime;
     ChannelType = core.ChannelType;
     createMessageMemory = core.createMessageMemory;
@@ -151,7 +158,7 @@ async function buildPlugins(): Promise<unknown[]> {
 
   if (hasDatabase) {
     try {
-      const sqlModule = await import('@elizaos/plugin-sql');
+      const sqlModule = await optionalImport('@elizaos/plugin-sql');
       const sqlPlugin = sqlModule.default || sqlModule.plugin;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { tests, ...rest } = sqlPlugin;
@@ -162,7 +169,7 @@ async function buildPlugins(): Promise<unknown[]> {
     }
   } else {
     try {
-      const inmemModule = await import('@elizaos/plugin-inmemorydb');
+      const inmemModule = await optionalImport('@elizaos/plugin-inmemorydb');
       const inmemPlugin = inmemModule.default || inmemModule.plugin;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { tests, ...rest } = inmemPlugin;
@@ -175,7 +182,7 @@ async function buildPlugins(): Promise<unknown[]> {
 
   if (hasDatabase) {
     try {
-      const goalsModule = await import('@elizaos/plugin-goals');
+      const goalsModule = await optionalImport('@elizaos/plugin-goals');
       const goalsPlugin = goalsModule.default || goalsModule.GoalsPlugin;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { tests, ...rest } = goalsPlugin;
@@ -186,7 +193,7 @@ async function buildPlugins(): Promise<unknown[]> {
     }
 
     try {
-      const todoModule = await import('@elizaos/plugin-todo');
+      const todoModule = await optionalImport('@elizaos/plugin-todo');
       const todoPlugin = todoModule.default || todoModule.todoPlugin;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { tests, ...rest } = todoPlugin;

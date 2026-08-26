@@ -116,24 +116,6 @@
   letter-spacing: 2px;
 }
 
-.triggerButton {
-  margin-top: auto;
-  padding: 10px 20px;
-  background: linear-gradient(180deg, #6b5010, #5a4210);
-  border: 2px solid #8b6914;
-  border-radius: 6px;
-  color: #f4e4c1;
-  font-family: 'Cinzel', serif;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.triggerButton:hover {
-  background: linear-gradient(180deg, #8b6914, #6b5010);
-  box-shadow: 0 0 10px rgba(139, 105, 20, 0.5);
-}
-
 /* Details section */
 .detailsSection {
   flex: 1;
@@ -303,55 +285,16 @@
   cursor: not-allowed;
 }
 
-/* JSON tab */
-.jsonTab {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-}
-
-.jsonEditor {
-  width: 100%;
-  min-height: 300px;
-  background: #1a1510;
-  border: 2px solid #5a4a3a;
-  border-radius: 6px;
-  color: #a0d911;
-  font-family: 'Monaco', 'Menlo', monospace;
+.saveSuccess {
+  margin-top: 10px;
   font-size: 12px;
-  padding: 15px;
-  resize: vertical;
+  color: #8fbc8f;
 }
 
-.jsonActions {
-  display: flex;
-  gap: 10px;
-}
-
-.jsonButton {
-  padding: 10px 20px;
-  border-radius: 6px;
-  font-family: 'Cinzel', serif;
-  font-size: 13px;
-  cursor: pointer;
-  border: 2px solid;
-  background: linear-gradient(180deg, #4a5568, #2d3748);
-  border-color: #718096;
-  color: #f4e4c1;
-  transition: all 0.2s;
-}
-
-.jsonButton:hover {
-  background: linear-gradient(180deg, #5a6578, #3d4758);
-}
-
-.jsonButton.apply {
-  background: linear-gradient(180deg, #6b8e23, #556b2f);
-  border-color: #8fbc8f;
-}
-
-.jsonButton.apply:hover {
-  background: linear-gradient(180deg, #7ba428, #607d3b);
+.saveError {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #cd9b9b;
 }
 
 /* Responsive */

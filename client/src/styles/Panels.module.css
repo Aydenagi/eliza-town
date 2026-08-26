@@ -155,6 +155,19 @@
   color: #d4b48a;
 }
 
+.agentStatus.talking {
+  background: rgba(70, 40, 80, 0.6);
+  border-color: #8a4a9a;
+  color: #d4a8e4;
+}
+
+.agentDoing {
+  font-size: 9px;
+  color: #8a9a7a;
+  font-style: italic;
+  margin-top: 2px;
+}
+
 /* Task list */
 .taskList {
   display: flex;
@@ -179,16 +192,78 @@
   border-left-color: #c9a959;
 }
 
+.taskItem.failed {
+  border-left-color: #a94a4a;
+}
+
+.taskTitleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
 .taskTitle {
   font-size: 12px;
   font-weight: 500;
   color: #f4e4c1;
 }
 
+.mineTag {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(201, 169, 89, 0.25);
+  border: 1px solid #8b6914;
+  color: #e4c979;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+
 .taskMeta {
   font-size: 10px;
   color: #a89878;
   margin-top: 3px;
+}
+
+.taskError {
+  font-size: 10px;
+  color: #d49a9a;
+  margin-top: 4px;
+}
+
+.pipeline {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.pipelineStage {
+  font-size: 8px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid #4a3a2a;
+  color: #7a6a5a;
+  text-transform: capitalize;
+}
+
+.pipelineStage.done {
+  border-color: #4a6a4a;
+  color: #8fbc8f;
+}
+
+.pipelineStage.active {
+  border-color: #c9a959;
+  color: #f4e4c1;
+  background: rgba(201, 169, 89, 0.2);
+}
+
+.pipelineStage.failed {
+  border-color: #7c4a4a;
+  color: #cd9b9b;
+  background: rgba(85, 34, 34, 0.4);
 }
 
 /* Results list */
@@ -257,6 +332,25 @@
   font-size: 10px;
   color: #8a9a7a;
   margin-top: 6px;
+}
+
+.resultSummary {
+  font-size: 11px;
+  color: #d4e4c4;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.previewLink {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 10px;
+  color: #a9d9a9;
+  text-decoration: underline;
+}
+
+.previewLink:hover {
+  color: #c9f9c9;
 }
 
 /* Messages panel */
@@ -338,6 +432,44 @@
   border: 2px solid #8b6914;
   border-radius: 6px;
   box-shadow: 0 4px 12px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.08);
+}
+
+.engineBanner {
+  font-size: 10px;
+  color: #b8a878;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid #5a4a3a;
+  border-radius: 4px;
+  padding: 5px 8px;
+  margin-bottom: 8px;
+}
+
+.titleInput {
+  width: 100%;
+  background: linear-gradient(180deg, #2e2218, #3d2d1f);
+  border: 2px solid #6b5a3e;
+  border-radius: 4px;
+  padding: 8px 10px;
+  color: #f4e4c1;
+  font-family: 'Crimson Text', serif;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.titleInput:focus {
+  outline: none;
+  border-color: #c9a959;
+}
+
+.titleInput::placeholder {
+  color: #7a6a5a;
+  font-style: italic;
+}
+
+.inputError {
+  margin-top: 6px;
+  font-size: 11px;
+  color: #d49a9a;
 }
 
 .inputHeader {
@@ -466,6 +598,131 @@
   background: #3a6a3a;
   border-color: #5a9a5a;
   box-shadow: 0 0 6px #5a9a5a;
+}
+
+/* Key settings */
+.keySettings {
+  position: relative;
+}
+
+.keyButton {
+  padding: 8px 10px;
+  background: linear-gradient(180deg, #4a3728, #3d2d1f);
+  border: 2px solid #6b5a3e;
+  border-radius: 4px;
+  color: #d4c4a4;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.keyButton:hover {
+  border-color: #8b6914;
+}
+
+.keyPopover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  width: 220px;
+  background: linear-gradient(180deg, #4a3728, #2e2218);
+  border: 2px solid #8b6914;
+  border-radius: 6px;
+  padding: 10px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.6);
+  z-index: 10;
+}
+
+.keyLabel {
+  display: block;
+  font-size: 9px;
+  color: #b8a88a;
+  text-transform: uppercase;
+  margin: 6px 0 3px;
+}
+
+.keySelect,
+.keyInput {
+  width: 100%;
+  background: #2e2218;
+  border: 1px solid #6b5a3e;
+  border-radius: 3px;
+  padding: 5px 7px;
+  color: #f4e4c1;
+  font-size: 11px;
+}
+
+.keyNote {
+  font-size: 9px;
+  color: #8a7a6a;
+  line-height: 1.4;
+  margin-top: 8px;
+}
+
+.keyActions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.keySave,
+.keyClear {
+  flex: 1;
+  padding: 6px;
+  border-radius: 4px;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.keySave {
+  background: #8b6914;
+  border: 1px solid #c9a959;
+  color: #f4e4c1;
+}
+
+.keySave:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.keyClear {
+  background: transparent;
+  border: 1px solid #6b5a3e;
+  color: #b8a88a;
+}
+
+/* World switcher */
+.worldSwitcher {
+  position: fixed;
+  bottom: 56px;
+  left: 20px;
+  display: flex;
+  gap: 6px;
+  z-index: 50;
+}
+
+.worldButton {
+  padding: 6px 10px;
+  background: linear-gradient(180deg, #4a3728, #3d2d1f);
+  border: 1px solid #6b5a3e;
+  border-radius: 4px;
+  color: #b8a88a;
+  font-family: 'Cinzel', serif;
+  font-size: 10px;
+  cursor: pointer;
+}
+
+.worldButton:hover {
+  border-color: #8b6914;
+  color: #f4e4c1;
+}
+
+.worldButtonActive {
+  border-color: #c9a959;
+  color: #f4e4c1;
+  background: linear-gradient(180deg, #6c5a42, #5a4738);
 }
 
 /* Scrollbar */

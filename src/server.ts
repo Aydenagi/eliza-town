@@ -1,288 +1,138 @@
-// Eliza Town Server - Static files + ElizaOS orchestration backend
-import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import express from 'express';
+import fs from 'fs';
 import { createServer } from 'http';
 import path from 'path';
-import fs from 'fs';
 import { fileURLToPath } from 'url';
-import * as ws from './websocket/index.js';
-import { startVisualDemo, stopVisualDemo, isVisualDemoRunning, getDemoState } from './eliza/visualDemo.js';
-import apiRoutes, { setDbAvailable } from './api/routes.js';
 
-import type { HealthResponse } from './types/index.js';
-
-// Try to load dotenv, but don't fail if it doesn't exist
 try {
   await import('dotenv/config');
 } catch {
-  // dotenv not available or no .env file - that's fine in production
+  // No dotenv installed or no .env file. Fine outside local dev.
 }
+
+const { config } = await import('./config.js');
+const { createApiRouter } = await import('./api/routes.js');
+const ws = await import('./websocket/index.js');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.join(__dirname, '..');
 
 const app = express();
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const server = createServer(app as any);
+const server = createServer(app);
 
-const PORT = process.env.PORT || 3000;
+// Behind Render's proxy req.ip is the proxy unless this is set, which would make the
+// per-IP task rate limit global.
+if (process.env.NODE_ENV === 'production') app.set('trust proxy', true);
 
-// Track initialization status
-let dbAvailable = false;
-let orchestrationReady = false;
-let wsInitialized = false;
-let visualDemoActive = false;
-let dbError: Error | null = null;
-let orchestrationModule: typeof import('./eliza/orchestration.js') | null = null;
-
-// Global error handlers to prevent crashes
-process.on('uncaughtException', (err: Error) => {
-  console.error('Uncaught Exception:', err.message);
-  console.error(err.stack);
-});
-
-process.on('unhandledRejection', (reason: unknown, promise: Promise<unknown>) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
-
-// Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
 
-// Health check (always works)
-app.get('/api/health', (_req, res) => {
-  const response: HealthResponse = {
-    status: 'ok',
-    dbAvailable,
-    orchestrationReady,
-    wsInitialized,
-    visualDemoActive,
-    dbError: dbError ? dbError.message : null,
-    hasDbUrl: !!process.env.DATABASE_URL,
-    hasOpenAIKey: !!process.env.OPENAI_API_KEY,
-    hasAnthropicKey: !!process.env.ANTHROPIC_API_KEY,
-    hasGroqKey: !!process.env.GROQ_API_KEY,
-    engine: 'ElizaOS',
-    timestamp: Date.now(),
-  };
-  res.json(response);
-});
-
-// Demo state endpoint (for new clients to get current state)
-app.get('/api/demo/state', (_req, res) => {
-  if (isVisualDemoRunning()) {
-    res.json({ running: true, state: getDemoState() });
-  } else {
-    res.json({ running: false, state: null });
-  }
-});
-
-// Determine if we have a built client
 const clientDistPath = path.join(rootDir, 'dist', 'client');
 const hasBuiltClient = fs.existsSync(clientDistPath);
-
 if (hasBuiltClient) {
-  // Serve built React app in production
-  console.log('Serving built React client from dist/client');
   app.use(express.static(clientDistPath));
-} else {
-  // Serve legacy index.html for development without client build
-  console.log('No built client found - serving legacy index.html');
 }
 
-// Always serve assets (3D models, textures, etc.)
 app.use(
   '/assets',
   express.static(path.join(rootDir, 'assets'), {
-    extensions: ['png', 'jpg', 'glb', 'gltf', 'bin', 'fbx'],
     setHeaders: (res, filepath) => {
-      // Set correct MIME types for 3D assets
-      if (filepath.endsWith('.gltf')) {
-        res.setHeader('Content-Type', 'model/gltf+json');
-      } else if (filepath.endsWith('.glb')) {
-        res.setHeader('Content-Type', 'model/gltf-binary');
-      } else if (filepath.endsWith('.bin')) {
-        res.setHeader('Content-Type', 'application/octet-stream');
-      }
+      if (filepath.endsWith('.gltf')) res.setHeader('Content-Type', 'model/gltf+json');
+      else if (filepath.endsWith('.glb')) res.setHeader('Content-Type', 'model/gltf-binary');
+      else if (filepath.endsWith('.bin')) res.setHeader('Content-Type', 'application/octet-stream');
     },
   })
 );
 
-// Mount API routes immediately (they will handle db availability checks internally)
-
-// Export db status check function for routes to use
-export function isDatabaseAvailable(): boolean {
-  return dbAvailable;
-}
-
-// Middleware to check database availability for routes that need it
-export function requireDatabase(
-  req: Request,
-  res: Response,
-  next: NextFunction
-): void {
-  if (!dbAvailable) {
-    res.status(503).json({
-      error: 'Database not available',
-      message: 'The server is running in static-only mode. Configure DATABASE_URL to enable this feature.',
-      dbError: dbError ? dbError.message : null,
-    });
-    return;
-  }
-  next();
-}
-
-app.use('/api', apiRoutes);
-
-// SPA fallback - serve index.html for all non-API routes
-app.get('*', (req, res, next) => {
-  if (req.path.startsWith('/api') || req.path.startsWith('/ws')) {
-    return next();
-  }
-
-  if (hasBuiltClient) {
-    res.sendFile(path.join(clientDistPath, 'index.html'));
-  } else {
-    res.sendFile(path.join(rootDir, 'index.html'));
-  }
-});
-
-// Initialize WebSocket BEFORE server starts listening
 ws.initialize(server);
-wsInitialized = true;
 
-// Start the server immediately so static files work
-server.listen(PORT, () => {
-  console.log(`Eliza Town server running on port ${PORT}`);
-  console.log('Static file serving is active');
-  console.log('WebSocket ready on /ws');
-});
+async function boot(): Promise<void> {
+  if (config.engine === 'eliza') {
+    const eliza = await import('./engine/eliza.js');
+    await eliza.startElizaEngine();
 
-// Initialize backend with ElizaOS
-async function initializeBackend(): Promise<void> {
-  // Check for at least one LLM provider - this is REQUIRED for real ElizaOS
-  const hasProvider =
-    process.env.OPENAI_API_KEY || process.env.ANTHROPIC_API_KEY || process.env.GROQ_API_KEY;
-  
-  if (!hasProvider) {
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('WARNING: No LLM API key configured!');
-    console.log('Set OPENAI_API_KEY, ANTHROPIC_API_KEY, or GROQ_API_KEY for real AI agents.');
-    console.log('Starting visual demo mode (scripted simulation, no actual AI)...');
-    console.log('═══════════════════════════════════════════════════════════════');
-    startVisualDemo(ws.broadcast);
-    visualDemoActive = true;
-    return;
+    app.use(
+      '/api',
+      createApiRouter({
+        listAgents: eliza.listAgentsEliza,
+        getAgent: eliza.getAgentEliza,
+        updateAgent: eliza.updateAgentEliza,
+        listTasks: eliza.listTasksEliza,
+        getTask: eliza.getTaskEliza,
+        createTask: eliza.createTaskEliza,
+        queueLength: eliza.queueLengthEliza,
+        health: eliza.healthInfoEliza,
+        recentMessages: eliza.recentMessagesEliza,
+      })
+    );
+
+    process.on('SIGINT', () => shutdown(eliza.stopElizaEngine));
+    process.on('SIGTERM', () => shutdown(eliza.stopElizaEngine));
+  } else {
+    const orchestrator = await import('./engine/orchestrator.js');
+    await orchestrator.init();
+
+    app.use(
+      '/api',
+      createApiRouter({
+        listAgents: orchestrator.listAgentsWire,
+        getAgent: orchestrator.getAgentWire,
+        updateAgent: orchestrator.updateAgentProfile,
+        listTasks: orchestrator.listTasksWire,
+        getTask: orchestrator.getTaskWire,
+        createTask: orchestrator.createTask,
+        queueLength: orchestrator.queueLength,
+        health: orchestrator.healthInfo,
+        recentMessages: orchestrator.recentMessages,
+      })
+    );
+
+    process.on('SIGINT', () => shutdown(orchestrator.shutdown));
+    process.on('SIGTERM', () => shutdown(orchestrator.shutdown));
   }
 
-  // We have an LLM provider - use REAL ElizaOS
-  const hasDatabase = !!process.env.DATABASE_URL;
-  
-  try {
-    let db: typeof import('./db/index.js') | null = null;
-    
-    if (hasDatabase) {
-      console.log('Initializing PostgreSQL database...');
-      db = await import('./db/index.js');
-      await db.initializeDatabase();
-      dbAvailable = true;
-      setDbAvailable(true);
-      console.log('✓ PostgreSQL database connected');
-
-      // Seed default agents if none exist
-      const agents = await db.getAgents();
-      if (agents.length === 0) {
-        console.log('Seeding default agents from ElizaOS characters...');
-        const { ELIZA_TOWN_CHARACTERS } = await import('./eliza/characters.js');
-        for (const character of ELIZA_TOWN_CHARACTERS) {
-          await db.createAgent(
-            character.name,
-            character.role,
-            character.modelId,
-            character.adjectives?.join(', ') || 'helpful',
-            character.capabilities?.join(', ') || 'general'
-          );
-        }
-        console.log(`Created ${ELIZA_TOWN_CHARACTERS.length} default agents`);
-      }
+  app.get(/^(?!\/api|\/ws).*/, (_req, res) => {
+    if (hasBuiltClient) {
+      res.sendFile(path.join(clientDistPath, 'index.html'));
     } else {
-      console.log('═══════════════════════════════════════════════════════════════');
-      console.log('No DATABASE_URL configured - using ElizaOS with in-memory storage');
-      console.log('Note: Agent state will not persist across restarts.');
-      console.log('Set DATABASE_URL for persistent storage.');
-      console.log('═══════════════════════════════════════════════════════════════');
+      res.status(503).send('Client not built. Run "npm run build" or start the client dev server separately.');
     }
+  });
 
-    // Initialize REAL ElizaOS orchestration (with or without PostgreSQL)
-    console.log('Initializing ElizaOS with REAL agent runtimes...');
-    orchestrationModule = await import('./eliza/orchestration.js');
-    const storage = await import('./storage/index.js');
+  server.once('error', (error: NodeJS.ErrnoException) => {
+    if (error.code === 'EADDRINUSE') {
+      console.error(`Port ${config.port} is already in use. Set PORT to a free port and try again.`);
+    } else {
+      console.error('Failed to start server:', error.message);
+    }
+    process.exit(1);
+  });
 
-    await orchestrationModule.initialize({
-      db: db,  // null if no DATABASE_URL - runtimeManager will use inmemorydb plugin
-      broadcast: ws.broadcast,
-      storage: storage,
-    });
-
-    orchestrationReady = true;
-
-    // Log active providers
-    const providers: string[] = [];
-    if (process.env.OPENAI_API_KEY) providers.push('OpenAI');
-    if (process.env.ANTHROPIC_API_KEY) providers.push('Anthropic');
-    if (process.env.GROQ_API_KEY) providers.push('Groq');
-
-    // Start the orchestration loop
-    orchestrationModule.start(5000);
-    console.log('═══════════════════════════════════════════════════════════════');
-    console.log('✓ ElizaOS orchestration loop started (5s interval)');
-    console.log(`✓ Active LLM providers: ${providers.join(', ')}`);
-    console.log(`✓ Database: ${hasDatabase ? 'PostgreSQL' : 'In-Memory (ElizaOS inmemorydb)'}`);
-    console.log('✓ REAL AI agents are now running!');
-    console.log('═══════════════════════════════════════════════════════════════');
-  } catch (error) {
-    dbError = error as Error;
-    console.error('═══════════════════════════════════════════════════════════════');
-    console.error('Backend initialization error:', (error as Error).message);
-    console.error('Full error:', error);
-    console.error('Falling back to visual demo mode (no AI)...');
-    console.error('═══════════════════════════════════════════════════════════════');
-    
-    // Fall back to visual demo on error
-    startVisualDemo(ws.broadcast);
-    visualDemoActive = true;
-  }
+  server.listen(config.port, () => {
+    console.log(`Eliza Town server listening on port ${config.port} (engine: ${config.engine})`);
+  });
 }
 
-// Initialize backend asynchronously
-initializeBackend();
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
+let shuttingDown = false;
+function shutdown(stopEngine: () => void): void {
+  if (shuttingDown) return;
+  shuttingDown = true;
   console.log('Shutting down...');
-  if (orchestrationReady && orchestrationModule) {
-    orchestrationModule.stop();
-  }
-  if (visualDemoActive) {
-    stopVisualDemo();
-  }
-  server.close(() => {
-    console.log('Server closed');
-    process.exit(0);
-  });
+  stopEngine();
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 5000).unref();
+}
+
+process.on('uncaughtException', (error: Error) => {
+  console.error('Uncaught exception:', error);
+});
+process.on('unhandledRejection', (reason: unknown) => {
+  console.error('Unhandled rejection:', reason);
 });
 
-process.on('SIGINT', () => {
-  console.log('\nShutting down...');
-  if (orchestrationReady && orchestrationModule) {
-    orchestrationModule.stop();
-  }
-  if (visualDemoActive) {
-    stopVisualDemo();
-  }
-  server.close(() => {
-    console.log('Server closed');
-    process.exit(0);
-  });
+boot().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
 });

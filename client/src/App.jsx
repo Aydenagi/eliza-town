@@ -1,137 +1,85 @@
-import { useEffect, useState } from 'react'
-import { Scene3D } from './components/Scene3D'
-import { AgentsPanel, TasksPanel, ResultsPanel, MessagesPanel, TaskInput } from './components/Panels'
+import { useEffect, useMemo } from 'react'
+import { Scene3D } from './scene/Scene3D'
+import { AgentsPanel, TasksPanel } from './components/Panels'
+import { TaskInput } from './components/TaskInput'
+import { ResultsPanel } from './components/ResultsPanel'
 import { AgentModal } from './components/AgentModal'
+import { WorldSwitcher } from './components/WorldSwitcher'
 import { useWebSocket } from './hooks/useWebSocket'
-import { useDemoMode } from './hooks/useDemoMode'
 import { useGameStore } from './stores/gameStore'
-import { checkHealth, getAgents, getTasks, getOrchestrationState } from './services/api'
+import { useSettingsStore } from './stores/settingsStore'
+import { getWorld } from './worlds/index'
+import { checkHealth } from './services/api'
 import './styles/global.css'
 
+const FALLBACK_AGENTS = [
+  { id: 'eliza-planner', name: 'Eliza', type: 'planner', model_id: 'witch', current_hub: 'planning_room' },
+  { id: 'marcus-designer', name: 'Marcus', type: 'designer', model_id: 'black_knight', current_hub: 'design_studio' },
+  { id: 'ada-coder', name: 'Ada', type: 'coder', model_id: 'protagonist_a', current_hub: 'coding_desk' },
+  { id: 'byron-coder', name: 'Byron', type: 'coder', model_id: 'hiker', current_hub: 'coding_desk' },
+  { id: 'clara-reviewer', name: 'Clara', type: 'reviewer', model_id: 'tiefling', current_hub: 'review_station' },
+  { id: 'felix-designer', name: 'Felix', type: 'designer', model_id: 'vampire', current_hub: 'design_studio' },
+].map((agent) => ({ ...agent, status: 'idle', doing: null, personality: '', capabilities: [] }))
+
+const HEALTH_POLL_MS = 15000
+
 function App() {
-  const [loading, setLoading] = useState(true)
-  const setAgents = useGameStore((s) => s.setAgents)
-  const setTasks = useGameStore((s) => s.setTasks)
-  const selectAgent = useGameStore((s) => s.selectAgent)
-  const setServerOnline = useGameStore((s) => s.setServerOnline)
-  
-  // Connect WebSocket
   useWebSocket()
-  
-  // Enable demo mode when server is offline
-  useDemoMode()
-  
-  // Check server health and fetch initial data periodically
+
+  const connected = useGameStore((s) => s.connected)
+  const agents = useGameStore((s) => s.agents)
+  const setAgents = useGameStore((s) => s.setAgents)
+  const setHealth = useGameStore((s) => s.setHealth)
+  const selectAgent = useGameStore((s) => s.selectAgent)
+  const worldId = useSettingsStore((s) => s.worldId)
+  const world = useMemo(() => getWorld(worldId), [worldId])
+
   useEffect(() => {
-    const fetchData = async () => {
+    if (!connected && Object.keys(agents).length === 0) {
+      setAgents(FALLBACK_AGENTS)
+    }
+  }, [connected, agents, setAgents])
+
+  useEffect(() => {
+    let cancelled = false
+    const poll = async () => {
       try {
         const health = await checkHealth()
-        setServerOnline(health.status === 'ok' && health.dbAvailable)
-        
-        if (health.dbAvailable) {
-          // Fetch agents
-          try {
-            const agents = await getAgents()
-            if (agents && agents.length > 0) {
-              setAgents(agents)
-            }
-          } catch (e) {
-            console.warn('Failed to fetch agents:', e)
-          }
-          
-          // Fetch tasks
-          try {
-            const tasks = await getTasks()
-            if (tasks) {
-              setTasks(tasks)
-            }
-          } catch (e) {
-            console.warn('Failed to fetch tasks:', e)
-          }
-          
-          // Fetch orchestration state for additional agent info
-          try {
-            const state = await getOrchestrationState()
-            if (state.agents && state.agents.length > 0) {
-              // Merge orchestration state with existing agents
-              setAgents(() => {
-                const currentAgents = useGameStore.getState().agents
-                return currentAgents.map(agent => {
-                  const stateAgent = state.agents.find(a => 
-                    a.name === agent.name || a.agentId === agent.id
-                  )
-                  if (stateAgent) {
-                    return {
-                      ...agent,
-                      current_hub: stateAgent.hub || agent.current_hub,
-                      status: stateAgent.status || agent.status,
-                      doing: stateAgent.doing || agent.doing,
-                    }
-                  }
-                  return agent
-                })
-              })
-            }
-          } catch (e) {
-            console.warn('Failed to fetch orchestration state:', e)
-          }
-        }
+        if (!cancelled) setHealth(health)
       } catch {
-        setServerOnline(false)
+        if (!cancelled) setHealth(null)
       }
     }
-    
-    fetchData()
-    const interval = setInterval(fetchData, 10000)
-    return () => clearInterval(interval)
-  }, [setServerOnline, setAgents, setTasks])
-  
-  // Hide loading after initial render
-  useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 1500)
-    return () => clearTimeout(timer)
-  }, [])
-  
-  const handleSelectAgent = (agent) => {
-    selectAgent(agent)
-  }
-  
+    poll()
+    const interval = setInterval(poll, HEALTH_POLL_MS)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [setHealth])
+
   return (
     <>
-      {/* Loading screen */}
-      {loading && (
-        <div className="loading">
-          <div className="spinner" />
-          <div>Loading Eliza Town...</div>
-        </div>
-      )}
-      
-      {/* 3D Scene */}
       <div className="canvasContainer">
-        <Scene3D onSelectAgent={handleSelectAgent} />
+        <Scene3D world={world} onSelectAgent={selectAgent} />
       </div>
-      
-      {/* Info */}
-      <div className="info">
-        Click agent to inspect | Mouse: Rotate | Scroll: Zoom
-      </div>
-      
-      {/* Branding */}
+
+      <div className="info">Click agent to inspect | Mouse: Rotate | Scroll: Zoom</div>
+
       <div className="branding">
         <div className="logo">E</div>
         <div className="text">Powered by <strong>ElizaOS</strong></div>
       </div>
-      
-      {/* UI Panels */}
+
+      <WorldSwitcher />
+
       <div className="uiContainer">
-        <AgentsPanel onSelectAgent={handleSelectAgent} />
+        <AgentsPanel />
         <TasksPanel />
         <ResultsPanel />
-        <MessagesPanel />
         <TaskInput />
       </div>
-      
-      {/* Agent Modal */}
+
       <AgentModal />
     </>
   )

@@ -23,7 +23,7 @@ import type {
 // Orchestration state
 let isRunning = false;
 let loopInterval: ReturnType<typeof setInterval> | null = null;
-let dbModule: typeof import('../db/index.js') | null = null;
+let dbModule: typeof import('../store/index.js') | null = null;
 let broadcastFn: BroadcastFn | null = null;
 let storageModule: typeof import('../storage/index.js') | null = null;
 
@@ -37,7 +37,7 @@ const MAX_DECISIONS_PER_TICK = 2;
 const AMBIENT_ACTIVITY_CHANCE = 0.15;
 
 interface InitializeOptions {
-  db?: typeof import('../db/index.js') | null;
+  db?: typeof import('../store/index.js') | null;
   broadcast?: BroadcastFn | null;
   storage?: typeof import('../storage/index.js') | null;
 }
@@ -250,7 +250,7 @@ async function updateTravelingAgents(): Promise<void> {
           broadcastFn({
             type: 'agent_arrived',
             data: {
-              agent: state.name,
+              agentName: state.name,
               agentId,
               hub: travel.targetHub,
             },
@@ -286,13 +286,13 @@ async function assignTaskToPlanner(plannerId: string, task: Task): Promise<void>
   if (broadcastFn) {
     broadcastFn({
       type: 'agent_status',
-      data: { agent: agentName, agentId: plannerId, status: 'working', doing: 'Analyzing task' },
+      data: { agentName: agentName, agentId: plannerId, status: 'working', doing: 'Analyzing task' },
     });
 
     broadcastFn({
       type: 'agent_speak',
       data: {
-        agent: agentName,
+        agentName: agentName,
         agentId: plannerId,
         text: `Let me break down: "${task.title}"`,
         type: 'saying',
@@ -422,7 +422,7 @@ After outputting the JSON, use SPEAK to announce your plan to the team.
       broadcastFn({
         type: 'agent_speak',
         data: {
-          agent: agentName,
+          agentName: agentName,
           agentId: plannerId,
           text: `I've broken this into ${subtasks.length} steps: ${subtasks.map((s) => s.title).join(', ')}`,
           type: 'saying',
@@ -440,7 +440,7 @@ After outputting the JSON, use SPEAK to announce your plan to the team.
   if (broadcastFn) {
     broadcastFn({
       type: 'agent_status',
-      data: { agent: agentName, agentId: plannerId, status: 'idle', doing: '' },
+      data: { agentName: agentName, agentId: plannerId, status: 'idle', doing: null },
     });
   }
 }
@@ -644,12 +644,12 @@ async function executeSubtask(agentId: string, task: Task, subtask: Subtask): Pr
   if (broadcastFn) {
     broadcastFn({
       type: 'agent_status',
-      data: { agent: agentName, agentId, status: 'working', doing: subtask.title },
+      data: { agentName: agentName, agentId, status: 'working', doing: subtask.title },
     });
 
     broadcastFn({
       type: 'agent_speak',
-      data: { agent: agentName, agentId, text: `Working on: ${subtask.title}`, type: 'saying' },
+      data: { agentName: agentName, agentId, text: `Working on: ${subtask.title}`, type: 'saying' },
     });
   }
 
@@ -737,7 +737,7 @@ Use SPEAK to communicate progress.`;
         for (const file of savedFiles) {
           broadcastFn({
             type: 'file_created',
-            data: { taskId: task.id, filename: file.name, size: file.size, agent: agentName },
+            data: { taskId: task.id, agentId, file: { name: file.name, size: file.size } },
           });
         }
       }
@@ -760,7 +760,7 @@ Use SPEAK to communicate progress.`;
   if (broadcastFn) {
     broadcastFn({
       type: 'agent_speak',
-      data: { agent: agentName, agentId, text: `Done with ${subtask.title}!`, type: 'saying' },
+      data: { agentName: agentName, agentId, text: `Done with ${subtask.title}!`, type: 'saying' },
     });
   }
 
@@ -780,7 +780,7 @@ Use SPEAK to communicate progress.`;
   if (broadcastFn) {
     broadcastFn({
       type: 'agent_status',
-      data: { agent: agentName, agentId, status: 'idle', doing: '' },
+      data: { agentName: agentName, agentId, status: 'idle', doing: null },
     });
   }
 }
@@ -805,7 +805,7 @@ async function moveAgentToHub(agentId: string, targetHub: string): Promise<void>
     broadcastFn({
       type: 'agent_move',
       data: {
-        agent: state.name,
+        agentName: state.name,
         agentId,
         from: currentPos,
         to: { x: hub.x, z: hub.z },
@@ -875,7 +875,7 @@ async function broadcastState(): Promise<void> {
     const metadata = runtimeManager.getMetadata(agentId);
 
     agents.push({
-      id: state.dbId || agentId,
+      id: agentId,
       name: state.name,
       type: metadata?.role,
       status: state.status,

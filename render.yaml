@@ -2,8 +2,10 @@ services:
   - type: web
     name: eliza-town
     runtime: node
-    buildCommand: "npm install"
+    buildCommand: "npm install && npm run build"
     startCommand: "npm start"
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_VERSION
+        value: "22"

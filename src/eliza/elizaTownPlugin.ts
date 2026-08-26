@@ -7,7 +7,7 @@
 
 import { HUBS, getHubForRole, type AgentRole, type HubName, type HubInfo } from './characters.js';
 import type { WebSocketMessage } from '../websocket/index.js';
-import type * as DbModule from '../db/index.js';
+import type * as DbModule from '../store/index.js';
 import type * as StorageModule from '../storage/index.js';
 import { getSharedSandbox } from './sharedSandbox.js';
 
@@ -566,7 +566,7 @@ const moveAction = {
       broadcastFn({
         type: 'agent_move',
         data: {
-          agent: agentName,
+          agentName: agentName,
           agentId,
           from: currentPos,
           to: targetPos,
@@ -588,7 +588,7 @@ const moveAction = {
       if (broadcastFn) {
         broadcastFn({
           type: 'agent_arrived',
-          data: { agent: agentName, agentId, hub: targetHub }
+          data: { agentName: agentName, agentId, hub: targetHub }
         });
       }
     }, travelTime);
@@ -663,7 +663,7 @@ const speakAction = {
       broadcastFn({
         type: 'agent_speak',
         data: {
-          agent: agentName,
+          agentName: agentName,
           agentId,
           text,
           type: target ? 'chat' : 'saying',
@@ -735,7 +735,7 @@ const thinkAction = {
     if (broadcastFn) {
       broadcastFn({
         type: 'agent_think',
-        data: { agent: agentName, agentId, text: thought }
+        data: { agentName: agentName, agentId, text: thought }
       });
     }
 
@@ -786,7 +786,7 @@ const workAction = {
     if (broadcastFn) {
       broadcastFn({
         type: 'agent_status',
-        data: { agent: agentName, agentId, status: 'working', doing: 'Processing task' }
+        data: { agentName: agentName, agentId, status: 'working', doing: 'Processing task' }
       });
     }
 
@@ -811,7 +811,7 @@ const workAction = {
             if (broadcastFn) {
               broadcastFn({
                 type: 'file_created',
-                data: { taskId, filename: 'design.json', size: output.length }
+                data: { taskId, agentId, file: { name: 'design.json', size: output.length } }
               });
             }
           } catch (e) {
@@ -831,7 +831,7 @@ const workAction = {
               if (broadcastFn) {
                 broadcastFn({
                   type: 'file_created',
-                  data: { taskId, filename: file.name, size: file.size }
+                  data: { taskId, agentId, file: { name: file.name, size: file.size } }
                 });
               }
             }
@@ -851,7 +851,7 @@ const workAction = {
             if (broadcastFn) {
               broadcastFn({
                 type: 'file_created',
-                data: { taskId, filename: 'review.json', size: output.length }
+                data: { taskId, agentId, file: { name: 'review.json', size: output.length } }
               });
             }
           } catch (e) {
@@ -871,7 +871,7 @@ const workAction = {
       if (broadcastFn) {
         broadcastFn({
           type: 'agent_status',
-          data: { agent: agentName, agentId, status: 'idle', doing: '' }
+          data: { agentName: agentName, agentId, status: 'idle', doing: null }
         });
       }
     }, 2000);
@@ -933,7 +933,7 @@ const writeCodeAction = {
         if (broadcastFn) {
           broadcastFn({
             type: 'file_created',
-            data: { taskId, filename, size: code.length, agent: agentName }
+            data: { taskId, agentId, file: { name: filename, size: code.length } }
           });
         }
 
@@ -1198,7 +1198,7 @@ const writeFileAction = {
       if (broadcastFn) {
         broadcastFn({
           type: 'file_created',
-          data: { filepath, size: content.length, agent: agentName }
+          data: { filepath, size: content.length, agentName: agentName }
         });
       }
 
@@ -1248,7 +1248,7 @@ const editFileAction = {
       if (broadcastFn) {
         broadcastFn({
           type: 'file_modified',
-          data: { filepath, agent: agentName }
+          data: { filepath, agentName: agentName }
         });
       }
 
