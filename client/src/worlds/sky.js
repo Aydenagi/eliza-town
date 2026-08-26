@@ -1,132 +1,129 @@
-import { hexToWorld, hexKey, hexFillAround, hexLine, seededRandom, roadRotation } from './hex'
-import { tileMapToArray, scatterProps } from './layout'
+const RING_RADIUS = 28
 
-const S = 3
-
-const ISLETS = {
-  town_square: { center: { q: 0, r: 0 }, radius: 2, y: 8, label: 'Town Square', color: '#c9a959' },
-  planning_room: { center: { q: -10, r: -4 }, radius: 1, y: 3, label: 'Planning Room', color: '#c084fc' },
-  design_studio: { center: { q: 10, r: -6 }, radius: 1, y: 11, label: 'Design Studio', color: '#f472b6' },
-  coding_desk: { center: { q: -10, r: 6 }, radius: 1, y: 5, label: 'Coding Desk', color: '#60a5fa' },
-  review_station: { center: { q: 9, r: 4 }, radius: 1, y: 12, label: 'Review Station', color: '#4ade80' },
-  deploy_station: { center: { q: 0, r: -14 }, radius: 1, y: 7, label: 'Deploy Station', color: '#fbbf24' },
-}
-
-const CAUSEWAYS = [
-  ['town_square', 'planning_room'],
-  ['town_square', 'design_studio'],
-  ['town_square', 'coding_desk'],
-  ['town_square', 'review_station'],
-  ['town_square', 'deploy_station'],
+const RING = [
+  { name: 'deploy_station', label: 'Deploy Station', color: '#fbbf24', y: 1, radius: 10 },
+  { name: 'design_studio', label: 'Design Studio', color: '#f472b6', y: 4, radius: 9 },
+  { name: 'planning_room', label: 'Planning Room', color: '#c084fc', y: 7, radius: 10 },
+  { name: 'review_station', label: 'Review Station', color: '#4ade80', y: 9, radius: 8 },
+  { name: 'coding_desk', label: 'Coding Desk', color: '#60a5fa', y: 6, radius: 9 },
+  { name: 'town_square', label: 'Town Square', color: '#c9a959', y: 3, radius: 12 },
 ]
 
-function buildIsletTiles(tileMap) {
-  for (const islet of Object.values(ISLETS)) {
-    for (const cell of hexFillAround(islet.center, islet.radius)) {
-      tileMap.set(hexKey(cell.q, cell.r), { type: 'hex_grass', q: cell.q, r: cell.r, y: islet.y, rotation: 0 })
-    }
-  }
+function ringPosition(i) {
+  const angle = (i / RING.length) * Math.PI * 2
+  return { x: Math.cos(angle) * RING_RADIUS, z: Math.sin(angle) * RING_RADIUS }
 }
 
-function buildCauseway(tileMap, fromName, toName) {
-  const from = ISLETS[fromName]
-  const to = ISLETS[toName]
-  const line = hexLine(from.center, to.center)
-  const nodes = {}
-  const edges = []
-  let prevName = fromName
-
-  line.forEach((cell, i) => {
-    if (i === 0 || i === line.length - 1) return
-    const t = i / (line.length - 1)
-    const y = from.y + (to.y - from.y) * t
-    const rotation = roadRotation(line[i - 1], line[i + 1], S)
-    tileMap.set(hexKey(cell.q, cell.r), { type: 'hex_road_A', q: cell.q, r: cell.r, y, rotation })
-    const name = `${fromName}__${toName}__${i}`
-    nodes[name] = hexToWorld(cell.q, cell.r, S, y)
-    edges.push([prevName, name])
-    prevName = name
-  })
-  edges.push([prevName, toName])
-
-  return { nodes, edges }
-}
-
-function buildHubs() {
+function buildPlatforms() {
   const hubs = {}
-  for (const [name, islet] of Object.entries(ISLETS)) {
-    const pos = hexToWorld(islet.center.q, islet.center.r, S, islet.y)
-    hubs[name] = { x: pos.x, y: pos.y, z: pos.z, label: islet.label, color: islet.color }
-  }
-  return hubs
-}
-
-function buildIsletDecorations(tileMap, rng) {
-  const props = []
-  for (const [name, islet] of Object.entries(ISLETS)) {
-    const cells = Array.from(hexFillAround(islet.center, islet.radius))
-      .map((c) => ({ ...c, y: islet.y }))
-    const count = name === 'town_square' ? 3 : 1
-    props.push(...scatterProps(cells, rng, {
-      count,
-      category: 'nature',
-      names: ['tree_single_A', 'tree_single_B'],
-      S,
-      scale: [0.8, 1],
-    }).map((p) => ({ ...p, y: p.y + islet.y })))
-  }
-  return props
-}
-
-function buildClouds(rng) {
-  const clouds = []
-  for (let i = 0; i < 10; i++) {
-    clouds.push({
-      x: (rng() - 0.5) * 90,
-      y: -6 + rng() * 10,
-      z: (rng() - 0.5) * 90,
-      scale: S * (0.7 + rng() * 0.7),
-      speed: 0.3 + rng() * 0.5,
+  const platforms = []
+  RING.forEach((entry, i) => {
+    const pos = ringPosition(i)
+    hubs[entry.name] = { x: pos.x, y: entry.y, z: pos.z, label: entry.label, color: entry.color }
+    platforms.push({
+      kind: 'platform', x: pos.x, y: entry.y, z: pos.z, rotation: 0,
+      params: { radius: entry.radius, thickness: 2.4, top: '#6f9e5c', rock: '#5a5248' },
     })
+  })
+  return { hubs, platforms }
+}
+
+function hubStructures(hubs) {
+  return [
+    { kind: 'tower', x: hubs.planning_room.x, y: hubs.planning_room.y, z: hubs.planning_room.z, rotation: 0,
+      params: { radius: 1.8, height: 13, roof: 'cone', color: '#7a6a95', roofColor: '#c9a5e8', windows: true, glow: true } },
+
+    { kind: 'dome', x: hubs.design_studio.x, y: hubs.design_studio.y, z: hubs.design_studio.z, rotation: 0,
+      params: { radius: 4, baseHeight: 3, color: '#8a97a8', glassColor: '#bcd9e8' } },
+
+    { kind: 'windmill', x: hubs.coding_desk.x, y: hubs.coding_desk.y, z: hubs.coding_desk.z, rotation: 0,
+      params: { towerHeight: 7, radius: 1.4, bladeLength: 2.8, color: '#c9b28a' } },
+
+    { kind: 'lighthouse', x: hubs.review_station.x, y: hubs.review_station.y, z: hubs.review_station.z, rotation: 0,
+      params: { height: 12 } },
+
+    { kind: 'pier', x: hubs.deploy_station.x, y: hubs.deploy_station.y, z: hubs.deploy_station.z - 3, rotation: 0,
+      params: { length: 6, width: 4, height: 0.3 } },
+    { kind: 'airship', x: hubs.deploy_station.x, y: hubs.deploy_station.y + 3, z: hubs.deploy_station.z + 2,
+      rotation: Math.PI / 5, params: { length: 8, color: '#c9a959' } },
+
+    { kind: 'fountain', x: hubs.town_square.x, y: hubs.town_square.y, z: hubs.town_square.z, rotation: 0,
+      params: { radius: 3 } },
+    { kind: 'bench', x: hubs.town_square.x - 5, y: hubs.town_square.y, z: hubs.town_square.z, rotation: Math.PI / 2, params: {} },
+    { kind: 'bench', x: hubs.town_square.x + 5, y: hubs.town_square.y, z: hubs.town_square.z, rotation: -Math.PI / 2, params: {} },
+  ]
+}
+
+function bridges(hubs) {
+  const parts = []
+  const edges = []
+  for (let i = 0; i < RING.length; i++) {
+    const a = RING[i]
+    const b = RING[(i + 1) % RING.length]
+    const posA = hubs[a.name]
+    const posB = hubs[b.name]
+    const dx = posB.x - posA.x
+    const dz = posB.z - posA.z
+    const dist = Math.hypot(dx, dz)
+    const dirX = dx / dist
+    const dirZ = dz / dist
+    const edgeA = { x: posA.x + dirX * a.radius, z: posA.z + dirZ * a.radius }
+    const edgeB = { x: posB.x - dirX * b.radius, z: posB.z - dirZ * b.radius }
+    const length = Math.hypot(edgeB.x - edgeA.x, edgeB.z - edgeA.z)
+    parts.push({
+      kind: 'ropeBridge',
+      x: (edgeA.x + edgeB.x) / 2,
+      y: (posA.y + posB.y) / 2,
+      z: (edgeA.z + edgeB.z) / 2,
+      rotation: Math.atan2(edgeB.x - edgeA.x, edgeB.z - edgeA.z),
+      params: { length, width: 2.2 },
+    })
+    edges.push([a.name, b.name])
   }
-  return clouds
+  return { parts, edges }
+}
+
+function clouds() {
+  const items = []
+  const seeds = [
+    [10, -2, 10, 3], [-16, 1, -8, 2.4], [22, 4, -18, 3.4], [-8, -4, 20, 2],
+    [0, 2, -30, 3.8], [30, 0, 8, 2.6], [-30, 3, -4, 3], [8, -3, -34, 2.2],
+  ]
+  for (const [x, y, z, scale] of seeds) {
+    items.push({ x, y, z, scale, speed: 0.3 + (Math.abs(x) % 3) * 0.1 })
+  }
+  return items
 }
 
 function generateSkyWorld() {
-  const rng = seededRandom(4004)
-  const tileMap = new Map()
-  buildIsletTiles(tileMap)
+  const { hubs, platforms } = buildPlatforms()
+  const { parts: bridgeParts, edges } = bridges(hubs)
 
-  const graphNodes = {}
-  const graphEdges = []
-  for (const [fromName, toName] of CAUSEWAYS) {
-    const { nodes, edges } = buildCauseway(tileMap, fromName, toName)
-    Object.assign(graphNodes, nodes)
-    graphEdges.push(...edges)
-  }
+  const structures = [...platforms, ...hubStructures(hubs), ...bridgeParts]
 
-  const hubs = buildHubs()
-  for (const [name, hub] of Object.entries(hubs)) {
-    graphNodes[name] = { x: hub.x, y: hub.y, z: hub.z }
-  }
+  const nodes = {}
+  for (const entry of RING) nodes[entry.name] = hubs[entry.name]
 
   return {
     id: 'sky',
     name: 'Cloudspire',
-    description: 'Floating islets linked by elevated causeways',
-    sky: '#2b4287',
-    fog: { color: '#2b4287', near: 50, far: 200 },
-    groundColor: null,
-    ambient: { intensity: 0.85, color: '#c8d4ff' },
-    sun: { position: [15, 60, 30], intensity: 1.9, color: '#f4f7ff' },
-    scale: S,
-    characterScale: 0.7,
-    camera: { position: [36, 26, 36], target: [0, ISLETS.town_square.y, 0] },
-    tiles: tileMapToArray(tileMap),
-    props: buildIsletDecorations(tileMap, rng),
-    clouds: buildClouds(rng),
+    description: 'Floating platforms above the clouds',
+    sky: '#2b4590',
+    fog: { color: '#2b4590', near: 60, far: 190 },
+    ground: null,
+    water: null,
+    roadColor: null,
+    roadWidth: 0,
+    plazas: [],
+    structures,
+    clouds: clouds(),
+    ambient: { intensity: 1.2, color: '#dfe6ff' },
+    hemisphere: { sky: '#7f9be0', ground: '#405080', intensity: 1.3 },
+    sun: { position: [30, 45, 20], intensity: 1.6, color: '#fff2e0' },
+    characterScale: 0.8,
+    camera: { position: [38, 22, 44], target: [0, 5, 0] },
     hubs,
-    graph: { nodes: graphNodes, edges: graphEdges },
+    graph: { nodes, edges },
   }
 }
 

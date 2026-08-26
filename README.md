@@ -50,8 +50,11 @@ server-wide.
 
 ## Worlds
 
-The town ships with four selectable worlds: Medieval Town, Harbor Island, Highlands, and Sky
-Isles. The agents, roles, and pipeline are the same in every world; only the setting changes.
+The town ships with four selectable worlds: Medieval Town, Saltmarsh Harbor, Night City, and
+Cloudspire. Every building, pier, tower, and bridge is generated in three.js from primitives
+(`client/src/scene/build/`), so a world is a small data file of structures, hubs, and a walk
+graph (`client/src/worlds/`). The agents, roles, and pipeline are the same in every world; only the
+setting changes.
 
 ## Engines
 

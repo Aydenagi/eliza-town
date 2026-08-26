@@ -1,128 +1,156 @@
 import { useMemo, useRef } from 'react'
 import { useFrame } from '@react-three/fiber'
-import { useGLTF, Instances, Instance, Billboard, Text } from '@react-three/drei'
+import { Billboard, Text } from '@react-three/drei'
 import * as THREE from 'three'
-import { hexToWorld } from '../worlds/hex'
-import { CLOUD_PATHS } from './assets'
-const CLOUD_WRAP = 100
+import * as structures from './build/structures'
+import { cloud } from './build/structures'
 
-function findMesh(object3d) {
-  let found = null
-  object3d.traverse((child) => {
-    if (!found && child.isMesh) found = child
-  })
-  return found
+const CLOUD_WRAP = 100
+const SPIN_SPEED = 0.6
+const BOB_SPEED = 0.8
+const BOB_AMOUNT = 0.3
+
+function buildStructure(def) {
+  const builder = structures[def.kind]
+  if (!builder) return null
+  const object = builder(def.params || {})
+  object.position.set(def.x, def.y || 0, def.z)
+  if (def.rotation) object.rotation.y = def.rotation
+  return object
 }
 
-function TileLayer({ world }) {
-  const tileTypes = useMemo(() => Array.from(new Set(world.tiles.map((t) => t.type))), [world])
-  const paths = useMemo(() => tileTypes.map((type) => `/assets/town/tiles/${type}.gltf`), [tileTypes])
-  const gltfs = useGLTF(paths)
-
-  const byType = useMemo(() => {
-    const groups = new Map()
-    for (const tile of world.tiles) {
-      if (!groups.has(tile.type)) groups.set(tile.type, [])
-      groups.get(tile.type).push(tile)
-    }
-    return groups
-  }, [world])
-
+function Ground({ world }) {
+  if (!world.ground) return null
+  const { size, color, x = 0, z = 0 } = world.ground
   return (
-    <>
-      {tileTypes.map((type, i) => {
-        const mesh = findMesh(gltfs[i].scene)
-        if (!mesh) return null
-        const tiles = byType.get(type)
-        return (
-          <Instances key={type} geometry={mesh.geometry} material={mesh.material} limit={tiles.length} castShadow receiveShadow>
-            {tiles.map((tile, idx) => {
-              const pos = hexToWorld(tile.q, tile.r, world.scale, tile.y)
-              return <Instance key={idx} position={[pos.x, pos.y, pos.z]} rotation={[0, tile.rotation, 0]} scale={world.scale} />
-            })}
-          </Instances>
-        )
-      })}
-    </>
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[x, -0.05, z]} receiveShadow>
+      <planeGeometry args={[size, size]} />
+      <meshStandardMaterial color={color} roughness={0.95} />
+    </mesh>
   )
 }
 
-function PropLayer({ world }) {
-  const uniqueAssets = useMemo(() => {
-    const seen = new Set()
-    const list = []
-    for (const prop of world.props) {
-      const key = `${prop.category}/${prop.name}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        list.push(key)
-      }
-    }
-    return list
-  }, [world])
-  const paths = useMemo(() => uniqueAssets.map((key) => `/assets/town/${key}.gltf`), [uniqueAssets])
-  const gltfs = useGLTF(paths)
+function Water({ world }) {
+  if (!world.water) return null
+  return (
+    <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, world.water.level, 0]} receiveShadow>
+      <planeGeometry args={[400, 400]} />
+      <meshStandardMaterial color={world.water.color} roughness={0.3} />
+    </mesh>
+  )
+}
 
-  const clones = useMemo(() => {
-    const byKey = new Map()
-    uniqueAssets.forEach((key, i) => byKey.set(key, gltfs[i]))
-    return world.props.map((prop) => {
-      const gltf = byKey.get(`${prop.category}/${prop.name}`)
-      const object = gltf.scene.clone()
-      object.traverse((child) => {
-        if (child.isMesh) {
-          child.castShadow = true
-          child.receiveShadow = true
-        }
-      })
-      return { object, prop }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [world, gltfs])
-
+function Plazas({ world }) {
   return (
     <>
-      {clones.map(({ object, prop }, i) => (
-        <primitive key={i} object={object} position={[prop.x, prop.y, prop.z]} rotation={[0, prop.rotation, 0]} scale={prop.scale} />
+      {(world.plazas || []).map((p, i) => (
+        <mesh key={i} position={[p.x, 0.02, p.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <circleGeometry args={[p.radius, 24]} />
+          <meshStandardMaterial color={p.color} roughness={0.95} />
+        </mesh>
       ))}
     </>
   )
 }
 
-function Cloud({ cloud, gltf }) {
-  const ref = useRef(null)
-  const xRef = useRef(cloud.x)
+function Roads({ world }) {
+  if (!world.roadColor) return null
+  return (
+    <group>
+      {world.graph.edges.map(([a, b], i) => {
+        const pa = world.graph.nodes[a]
+        const pb = world.graph.nodes[b]
+        if (!pa || !pb) return null
+        const dx = pb.x - pa.x
+        const dz = pb.z - pa.z
+        const length = Math.hypot(dx, dz)
+        const angle = Math.atan2(dx, dz)
+        return (
+          <mesh
+            key={i}
+            position={[(pa.x + pb.x) / 2, (pa.y + pb.y) / 2 + 0.03, (pa.z + pb.z) / 2]}
+            rotation={[0, angle, 0]}
+            receiveShadow
+          >
+            <boxGeometry args={[world.roadWidth, 0.06, length]} />
+            <meshStandardMaterial color={world.roadColor} roughness={0.95} />
+          </mesh>
+        )
+      })}
+      {Object.entries(world.graph.nodes).map(([name, pos]) => (
+        <mesh key={name} position={[pos.x, pos.y + 0.03, pos.z]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <circleGeometry args={[world.roadWidth / 2, 12]} />
+          <meshStandardMaterial color={world.roadColor} roughness={0.95} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
+function SpinningStructure({ def }) {
+  const object = useMemo(() => buildStructure(def), [def])
+  const rootRef = useRef(null)
 
   useFrame((_, delta) => {
-    xRef.current += cloud.speed * delta * 2
-    if (xRef.current > CLOUD_WRAP) xRef.current = -CLOUD_WRAP
-    if (ref.current) ref.current.position.x = xRef.current
+    const sails = rootRef.current?.userData.spinTarget
+    if (sails) sails.rotation.z += delta * SPIN_SPEED
   })
 
-  const object = useMemo(() => {
-    const clonedScene = gltf.scene.clone()
-    clonedScene.traverse((child) => {
-      if (child.isMesh) {
-        child.castShadow = false
-        child.receiveShadow = false
-        child.material = child.material.clone()
-        child.material.transparent = true
-        child.material.opacity = 0.9
-      }
-    })
-    return clonedScene
-  }, [gltf])
+  return <primitive ref={rootRef} object={object} />
+}
 
-  return <primitive ref={ref} object={object} position={[cloud.x, cloud.y, cloud.z]} scale={cloud.scale} />
+function BobbingStructure({ def }) {
+  const object = useMemo(() => buildStructure(def), [def])
+  const rootRef = useRef(null)
+  const baseY = def.y || 0
+
+  useFrame((state) => {
+    if (rootRef.current) rootRef.current.position.y = baseY + Math.sin(state.clock.elapsedTime * BOB_SPEED) * BOB_AMOUNT
+  })
+
+  return <primitive ref={rootRef} object={object} />
+}
+
+function StructureLayer({ world }) {
+  const objects = useMemo(
+    () => world.structures.filter((def) => def.kind !== 'windmill' && def.kind !== 'airship').map(buildStructure).filter(Boolean),
+    [world],
+  )
+  const animated = useMemo(
+    () => world.structures.filter((def) => def.kind === 'windmill' || def.kind === 'airship'),
+    [world],
+  )
+
+  return (
+    <>
+      {objects.map((object, i) => <primitive key={i} object={object} />)}
+      {animated.map((def, i) => (
+        def.kind === 'windmill'
+          ? <SpinningStructure key={`spin-${i}`} def={def} />
+          : <BobbingStructure key={`bob-${i}`} def={def} />
+      ))}
+    </>
+  )
+}
+
+function CloudItem({ def }) {
+  const ref = useRef(null)
+  const xRef = useRef(def.x)
+  const object = useMemo(() => cloud({ scale: def.scale }), [def.scale])
+
+  useFrame((_, delta) => {
+    xRef.current += def.speed * delta * 2
+    if (xRef.current > CLOUD_WRAP) xRef.current = -CLOUD_WRAP
+    if (ref.current) ref.current.position.set(xRef.current, def.y, def.z)
+  })
+
+  return <primitive ref={ref} object={object} position={[def.x, def.y, def.z]} />
 }
 
 function CloudLayer({ world }) {
-  const [big, small] = useGLTF(CLOUD_PATHS)
   return (
     <>
-      {world.clouds.map((cloud, i) => (
-        <Cloud key={i} cloud={cloud} gltf={cloud.scale >= world.scale ? big : small} />
-      ))}
+      {world.clouds.map((c, i) => <CloudItem key={i} def={c} />)}
     </>
   )
 }
@@ -131,13 +159,13 @@ function HubMarkers({ world }) {
   return (
     <>
       {Object.entries(world.hubs).map(([name, hub]) => (
-        <group key={name} position={[hub.x, hub.y + 0.02, hub.z]}>
+        <group key={name} position={[hub.x, hub.y + 0.03, hub.z]}>
           <mesh rotation={[-Math.PI / 2, 0, 0]}>
-            <circleGeometry args={[world.scale * 0.8, 24]} />
-            <meshBasicMaterial color={hub.color} transparent opacity={0.28} side={THREE.DoubleSide} />
+            <ringGeometry args={[1.6, 2, 32]} />
+            <meshBasicMaterial color={hub.color} transparent opacity={0.35} side={THREE.DoubleSide} />
           </mesh>
-          <Billboard position={[0, 1.4, 0]}>
-            <Text fontSize={0.5} color={hub.color} outlineWidth={0.025} outlineColor="#1a1408" anchorX="center" anchorY="middle">
+          <Billboard position={[0, 4, 0]}>
+            <Text fontSize={0.55} color={hub.color} outlineWidth={0.03} outlineColor="#1a1408" anchorX="center" anchorY="middle">
               {hub.label}
             </Text>
           </Billboard>
@@ -150,8 +178,11 @@ function HubMarkers({ world }) {
 export function WorldRenderer({ world }) {
   return (
     <>
-      <TileLayer world={world} />
-      <PropLayer world={world} />
+      <Ground world={world} />
+      <Water world={world} />
+      <Plazas world={world} />
+      <Roads world={world} />
+      <StructureLayer world={world} />
       <CloudLayer world={world} />
       <HubMarkers world={world} />
     </>

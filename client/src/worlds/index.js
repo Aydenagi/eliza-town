@@ -1,9 +1,9 @@
 import town from './town'
-import island from './island'
-import highlands from './highlands'
+import harbor from './harbor'
+import city from './city'
 import sky from './sky'
 
-export const WORLDS = { town, island, highlands, sky }
+export const WORLDS = { town, harbor, city, sky }
 export const DEFAULT_WORLD = 'town'
 export const WORLD_IDS = Object.keys(WORLDS)
 

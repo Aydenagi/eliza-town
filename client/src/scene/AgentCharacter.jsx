@@ -45,11 +45,12 @@ function shortestAngleLerp(current, target, factor) {
   return current + diff * factor
 }
 
-function hubOffset(index, count, scale) {
+const HUB_OFFSET_RADIUS = 1.2
+
+function hubOffset(index, count) {
   if (count <= 1) return { dx: 0, dz: 0 }
   const angle = (index / count) * Math.PI * 2
-  const radius = scale * 0.6
-  return { dx: Math.cos(angle) * radius, dz: Math.sin(angle) * radius }
+  return { dx: Math.cos(angle) * HUB_OFFSET_RADIUS, dz: Math.sin(angle) * HUB_OFFSET_RADIUS }
 }
 
 function buildWalkPlan(world, movement, currentPos, offset) {
@@ -128,7 +129,7 @@ export function AgentCharacter({ agent, world, slotIndex, slotCount, onSelect })
     return { clone: cloned, bones: boneMap, rest: restMap }
   }, [scene])
 
-  const offset = useMemo(() => hubOffset(slotIndex, slotCount, world.scale), [slotIndex, slotCount, world.scale])
+  const offset = useMemo(() => hubOffset(slotIndex, slotCount), [slotIndex, slotCount])
 
   const hubPosition = (hubName) => {
     const hub = world.hubs[hubName] || world.hubs.town_square

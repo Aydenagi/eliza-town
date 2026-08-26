@@ -24,8 +24,8 @@ Thumbs.db
 *.swo
 
 # Build
-dist/
-build/
+/dist/
+/build/
 
 # Misc
 *.tmp

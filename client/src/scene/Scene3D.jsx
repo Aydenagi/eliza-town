@@ -3,7 +3,6 @@ import { Canvas } from '@react-three/fiber'
 import { OrbitControls, useProgress } from '@react-three/drei'
 import { useGameStore, useBubbleStore } from '../stores/gameStore'
 import { WorldRenderer } from './WorldRenderer'
-import { preloadWorldAssets } from './assetPreload'
 import { AgentCharacter } from './AgentCharacter'
 import { SceneErrorBoundary } from './ErrorBoundary'
 
@@ -21,13 +20,12 @@ function groupByHub(agents) {
 function SceneContents({ world, agents, onSelectAgent }) {
   const hubGroups = useMemo(() => groupByHub(agents), [agents])
 
-  useEffect(() => {
-    preloadWorldAssets(world)
-  }, [world])
-
   return (
     <>
       <ambientLight intensity={world.ambient.intensity} color={world.ambient.color} />
+      <hemisphereLight
+        args={[world.hemisphere.sky, world.hemisphere.ground, world.hemisphere.intensity]}
+      />
       <directionalLight
         position={world.sun.position}
         intensity={world.sun.intensity}
@@ -36,18 +34,12 @@ function SceneContents({ world, agents, onSelectAgent }) {
         shadow-mapSize={[2048, 2048]}
         shadow-camera-near={0.5}
         shadow-camera-far={200}
-        shadow-camera-left={-60}
-        shadow-camera-right={60}
-        shadow-camera-top={60}
-        shadow-camera-bottom={-60}
+        shadow-camera-left={-90}
+        shadow-camera-right={90}
+        shadow-camera-top={90}
+        shadow-camera-bottom={-90}
+        shadow-normalBias={0.05}
       />
-
-      {world.groundColor && (
-        <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.05, 0]} receiveShadow>
-          <planeGeometry args={[400, 400]} />
-          <meshStandardMaterial color={world.groundColor} roughness={0.9} />
-        </mesh>
-      )}
 
       <WorldRenderer world={world} />
 
@@ -68,8 +60,8 @@ function SceneContents({ world, agents, onSelectAgent }) {
       <OrbitControls
         enableDamping
         dampingFactor={0.05}
-        maxPolarAngle={Math.PI / 2.1}
-        minDistance={5}
+        maxPolarAngle={Math.PI / 2 - 0.06}
+        minDistance={8}
         maxDistance={140}
         target={world.camera.target}
       />
@@ -105,7 +97,7 @@ export function Scene3D({ world, onSelectAgent }) {
         <Canvas
           key={world.id}
           shadows
-          camera={{ position: world.camera.position, fov: 55, near: 0.1, far: 2000 }}
+          camera={{ position: world.camera.position, fov: 50, near: 0.1, far: 2000 }}
           style={{ background: world.sky }}
         >
           <fog attach="fog" args={[world.fog.color, world.fog.near, world.fog.far]} />

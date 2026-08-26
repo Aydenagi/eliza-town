@@ -1,9 +1,30 @@
 import { describe, it, expect } from 'vitest'
 import { WORLDS } from './index'
 import { bfsPath } from './graph'
-import { hexToWorld } from './hex'
+import * as structures from '../scene/build/structures'
 
 const HUB_NAMES = ['town_square', 'planning_room', 'design_studio', 'coding_desk', 'review_station', 'deploy_station']
+
+function reachableFrom(graph, start) {
+  const adjacency = new Map()
+  for (const [a, b] of graph.edges) {
+    if (!adjacency.has(a)) adjacency.set(a, [])
+    if (!adjacency.has(b)) adjacency.set(b, [])
+    adjacency.get(a).push(b)
+    adjacency.get(b).push(a)
+  }
+  const visited = new Set([start])
+  const queue = [start]
+  while (queue.length > 0) {
+    const node = queue.shift()
+    for (const neighbor of adjacency.get(node) || []) {
+      if (visited.has(neighbor)) continue
+      visited.add(neighbor)
+      queue.push(neighbor)
+    }
+  }
+  return visited
+}
 
 describe.each(Object.entries(WORLDS))('world: %s', (id, world) => {
   it('has all six hubs', () => {
@@ -15,17 +36,6 @@ describe.each(Object.entries(WORLDS))('world: %s', (id, world) => {
   it('has every hub as a graph node', () => {
     for (const name of HUB_NAMES) {
       expect(world.graph.nodes[name]).toBeTruthy()
-    }
-  })
-
-  it('every hub position matches a hex cell center', () => {
-    for (const name of HUB_NAMES) {
-      const hub = world.hubs[name]
-      const match = world.tiles.some((tile) => {
-        const pos = hexToWorld(tile.q, tile.r, world.scale, tile.y)
-        return Math.abs(pos.x - hub.x) < 0.01 && Math.abs(pos.z - hub.z) < 0.01
-      })
-      expect(match).toBe(true)
     }
   })
 
@@ -46,7 +56,25 @@ describe.each(Object.entries(WORLDS))('world: %s', (id, world) => {
     }
   })
 
-  it('has a non-empty tile set', () => {
-    expect(world.tiles.length).toBeGreaterThan(0)
+  it('the graph is fully connected', () => {
+    const nodeNames = Object.keys(world.graph.nodes)
+    const reached = reachableFrom(world.graph, nodeNames[0])
+    for (const name of nodeNames) {
+      expect(reached.has(name), `${id}: ${name} unreachable`).toBe(true)
+    }
+  })
+
+  it('every structure kind exists in structures.js', () => {
+    for (const s of world.structures) {
+      expect(typeof structures[s.kind], `${id}: unknown structure kind ${s.kind}`).toBe('function')
+    }
+  })
+
+  it('has camera and lighting configured', () => {
+    expect(world.camera.position).toHaveLength(3)
+    expect(world.camera.target).toHaveLength(3)
+    expect(world.ambient).toBeTruthy()
+    expect(world.hemisphere).toBeTruthy()
+    expect(world.sun).toBeTruthy()
   })
 })
